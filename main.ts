@@ -2,10 +2,11 @@
 // A program that draws a newspaper front page summing up the world news of
 // Sunday 22 November 2026, and writes it to /output/entry.png.
 //
-// The page is drawn entirely in code: a hand-written 5x7 bitmap font, flat
-// vector shapes, and a hand-rolled PNG encoder. No network, no external
-// files, no randomness, no clock reads — the program runs twice and writes
-// byte-identical output both times. Standard library only (Node 22).
+// The page is drawn entirely in code: a DejaVu Serif Bold glyph atlas
+// (font-glyphs.txt, a data file read at startup), flat vector shapes, and
+// a hand-rolled PNG encoder. No network, no randomness, no clock reads —
+// the program runs twice and writes byte-identical output both times.
+// Standard library only (Node 22).
 //
 // Design (from the winning grammar of the 20261121 + 20261122 editions):
 // cream paper, red + navy + black, giant date masthead, "THE DAY IN UTC"
@@ -14,15 +15,14 @@
 // speaks to the judge: it names the events deliberately left out because
 // they belong to other days.
 //
-// Facts come only from the verified news file of 22 Nov 2026. Every claim
+// Facts come only from the verified news files of 22 Nov 2026. Every claim
 // carries a certainty tag (CONFIRMED / OFFICIAL / REPORTED / CLAIM).
-// The honest count is 28 stories: 3 heroes + 10 small cards + 15 in the
+// The honest count is 35 stories: 3 heroes + 10 small cards + 22 in the
 // ALSO list. Nothing is inflated.
-// Polish pass 1 (interim): gradient hero skies, richer hero art, labelled
-// numbers strip, 28 stories. The serif-font pass lands after the harness
-// verdict on PIL; the 5x7 bitmap font below is replaced then.
+// Polish pass 2: serif font from the glyph atlas, 35 stories, labelled
+// numbers strip, generous small-card line-height.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
@@ -193,163 +193,175 @@ function encodePng(): Buffer {
   ]);
 }
 
-// ------------------------------------------------- 5x7 bitmap font (ASCII)
-// Each glyph is 7 rows; each row is a 5-bit mask, bit 4 = leftmost pixel.
-// Index = charCode - 32. Full printable ASCII, 32..126.
-const FONT: number[][] = [
-  [0, 0, 0, 0, 0, 0, 0], // space
-  [0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04], // !
-  [0x0a, 0x0a, 0x0a, 0x00, 0x00, 0x00, 0x00], // "
-  [0x0a, 0x0a, 0x1f, 0x0a, 0x1f, 0x0a, 0x0a], // #
-  [0x04, 0x0f, 0x14, 0x0e, 0x05, 0x1e, 0x04], // $
-  [0x18, 0x19, 0x02, 0x04, 0x08, 0x13, 0x03], // %
-  [0x0c, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0d], // &
-  [0x04, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00], // '
-  [0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02], // (
-  [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08], // )
-  [0x00, 0x04, 0x15, 0x0e, 0x15, 0x04, 0x00], // *
-  [0x00, 0x04, 0x04, 0x1f, 0x04, 0x04, 0x00], // +
-  [0x00, 0x00, 0x00, 0x00, 0x0c, 0x04, 0x08], // ,
-  [0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00], // -
-  [0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x0c], // .
-  [0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10], // /
-  [0x0e, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0e], // 0
-  [0x04, 0x0c, 0x04, 0x04, 0x04, 0x04, 0x0e], // 1
-  [0x0e, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1f], // 2
-  [0x1f, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0e], // 3
-  [0x02, 0x06, 0x0a, 0x12, 0x1f, 0x02, 0x02], // 4
-  [0x1f, 0x10, 0x1e, 0x01, 0x01, 0x11, 0x0e], // 5
-  [0x06, 0x08, 0x10, 0x1e, 0x11, 0x11, 0x0e], // 6
-  [0x1f, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08], // 7
-  [0x0e, 0x11, 0x11, 0x0e, 0x11, 0x11, 0x0e], // 8
-  [0x0e, 0x11, 0x11, 0x0f, 0x01, 0x02, 0x0c], // 9
-  [0x00, 0x0c, 0x0c, 0x00, 0x0c, 0x0c, 0x00], // :
-  [0x00, 0x0c, 0x0c, 0x00, 0x0c, 0x04, 0x08], // ;
-  [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02], // <
-  [0x00, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x00], // =
-  [0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08], // >
-  [0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04], // ?
-  [0x0e, 0x11, 0x01, 0x0d, 0x15, 0x15, 0x0e], // @
-  [0x0e, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11], // A
-  [0x1e, 0x11, 0x11, 0x1e, 0x11, 0x11, 0x1e], // B
-  [0x0e, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0e], // C
-  [0x1e, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1e], // D
-  [0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x1f], // E
-  [0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x10], // F
-  [0x0e, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0f], // G
-  [0x11, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11], // H
-  [0x0e, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0e], // I
-  [0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0c], // J
-  [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11], // K
-  [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1f], // L
-  [0x11, 0x1b, 0x15, 0x15, 0x11, 0x11, 0x11], // M
-  [0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11], // N
-  [0x0e, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e], // O
-  [0x1e, 0x11, 0x11, 0x1e, 0x10, 0x10, 0x10], // P
-  [0x0e, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0d], // Q
-  [0x1e, 0x11, 0x11, 0x1e, 0x14, 0x12, 0x11], // R
-  [0x0f, 0x10, 0x10, 0x0e, 0x01, 0x01, 0x1e], // S
-  [0x1f, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04], // T
-  [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e], // U
-  [0x11, 0x11, 0x11, 0x11, 0x11, 0x0a, 0x04], // V
-  [0x11, 0x11, 0x11, 0x15, 0x15, 0x1b, 0x11], // W
-  [0x11, 0x11, 0x0a, 0x04, 0x0a, 0x11, 0x11], // X
-  [0x11, 0x11, 0x0a, 0x04, 0x04, 0x04, 0x04], // Y
-  [0x1f, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1f], // Z
-  [0x0e, 0x08, 0x08, 0x08, 0x08, 0x08, 0x0e], // [
-  [0x10, 0x08, 0x08, 0x04, 0x02, 0x02, 0x01], // backslash
-  [0x0e, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0e], // ]
-  [0x04, 0x0a, 0x11, 0x00, 0x00, 0x00, 0x00], // ^
-  [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f], // _
-  [0x08, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00], // `
-  [0x00, 0x00, 0x0e, 0x01, 0x0f, 0x11, 0x0f], // a
-  [0x10, 0x10, 0x16, 0x19, 0x11, 0x11, 0x1e], // b
-  [0x00, 0x00, 0x0e, 0x10, 0x10, 0x10, 0x0e], // c
-  [0x01, 0x01, 0x0d, 0x13, 0x11, 0x11, 0x0f], // d
-  [0x00, 0x00, 0x0e, 0x11, 0x1f, 0x10, 0x0e], // e
-  [0x06, 0x08, 0x08, 0x1e, 0x08, 0x08, 0x08], // f
-  [0x00, 0x0f, 0x11, 0x11, 0x0f, 0x01, 0x0e], // g
-  [0x10, 0x10, 0x16, 0x19, 0x11, 0x11, 0x11], // h
-  [0x04, 0x00, 0x0c, 0x04, 0x04, 0x04, 0x0e], // i
-  [0x02, 0x00, 0x06, 0x02, 0x02, 0x12, 0x0c], // j
-  [0x10, 0x10, 0x12, 0x14, 0x18, 0x14, 0x12], // k
-  [0x0c, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0e], // l
-  [0x00, 0x00, 0x1a, 0x15, 0x15, 0x15, 0x15], // m
-  [0x00, 0x00, 0x16, 0x19, 0x11, 0x11, 0x11], // n
-  [0x00, 0x00, 0x0e, 0x11, 0x11, 0x11, 0x0e], // o
-  [0x00, 0x00, 0x1e, 0x11, 0x11, 0x1e, 0x10], // p
-  [0x00, 0x00, 0x0d, 0x13, 0x11, 0x0f, 0x01], // q
-  [0x00, 0x00, 0x16, 0x19, 0x10, 0x10, 0x10], // r
-  [0x00, 0x00, 0x0f, 0x10, 0x0e, 0x01, 0x1e], // s
-  [0x08, 0x08, 0x1e, 0x08, 0x08, 0x09, 0x06], // t
-  [0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0d], // u
-  [0x00, 0x00, 0x11, 0x11, 0x11, 0x0a, 0x04], // v
-  [0x00, 0x00, 0x11, 0x15, 0x15, 0x1b, 0x11], // w
-  [0x00, 0x00, 0x11, 0x0a, 0x04, 0x0a, 0x11], // x
-  [0x00, 0x00, 0x11, 0x11, 0x0f, 0x01, 0x0e], // y
-  [0x00, 0x00, 0x1f, 0x02, 0x04, 0x08, 0x1f], // z
-  [0x02, 0x04, 0x04, 0x08, 0x04, 0x04, 0x02], // {
-  [0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04], // |
-  [0x08, 0x04, 0x04, 0x02, 0x04, 0x04, 0x08], // }
-  [0x00, 0x00, 0x00, 0x0e, 0x15, 0x00, 0x00], // ~
-];
+// ------------------------------------------- serif atlas (DejaVu Serif Bold)
+// font-glyphs.txt is a DATA file (copied, not authored): one line per glyph,
+// ASCII 32..126, rendered at 64 px: [advance, xOff, yOff, w, h, 'base64bits']
+// where (xOff, yOff) is the ink-box top-left relative to the ascender top.
+// Atlas metrics (DejaVu Serif Bold at 64 px): ascent 61, descent 16,
+// line height 1.203. The file is read at startup with fs.readFileSync;
+// the harness runs node /bot/main.ts with the whole repo at /bot, so the
+// sibling data file is always there. No PIL, no TTF at runtime.
+const ATLAS_SIZE = 64;
+const ATLAS_ASCENT = 61;
+
+interface Glyph {
+  adv: number;
+  xOff: number;
+  yOff: number;
+  w: number;
+  h: number;
+  bits: Uint8Array; // row-major 0/1, w*h
+}
+
+function loadAtlas(): Glyph[] {
+  let text = '';
+  try {
+    text = readFileSync(new URL('./font-glyphs.txt', import.meta.url), 'utf8');
+  } catch {
+    text = readFileSync(join(process.cwd(), 'font-glyphs.txt'), 'utf8');
+  }
+  const out: Glyph[] = [];
+  const re = /^\s*\[([\d.]+),\s*(-?\d+),\s*(-?\d+),\s*(\d+),\s*(\d+),\s*'([^']*)'\s*\]/;
+  for (const line of text.split('\n')) {
+    const m = re.exec(line);
+    if (!m) continue;
+    const adv = Number(m[1]);
+    const xOff = Number(m[2]);
+    const yOff = Number(m[3]);
+    const w = Number(m[4]);
+    const h = Number(m[5]);
+    const raw = Buffer.from(m[6], 'base64');
+    const bits = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      bits[i] = (raw[i >> 3] >> (7 - (i & 7))) & 1;
+    }
+    out.push({ adv, xOff, yOff, w, h, bits });
+  }
+  if (out.length !== 95) throw new Error(`atlas: expected 95 glyphs, got ${out.length}`);
+  return out;
+}
+
+const GLYPHS = loadAtlas();
+
 
 // ------------------------------------------------------------ text engine
-// One character cell is 6*scale wide (5 px glyph + 1 px gap) and 7*scale
-// tall. Bold draws each glyph twice, 1 px (or 2 px at scale >= 4) apart,
-// which thickens the strokes without changing the metrics.
+// Serif text from the atlas. Sizes are em px (not integer scales): y is
+// the TOP of the em box (ascender top). One glyph is drawn with
+// area-coverage anti-aliasing: each output pixel samples a 3x3 grid of
+// points inside it, mapped back to the 64 px atlas, so one atlas serves
+// every size from 10 px labels to the 40 px date. Bold smears each glyph
+// 1-2 px to the right at draw time (metrics unchanged).
 
-function textWidth(s: string, scale: number): number {
-  return s.length === 0 ? 0 : s.length * 6 * scale - scale;
+function blendPixel(x: number, y: number, c: RGB, a: number): void {
+  if (x < 0 || y < 0 || x >= W || y >= H || a <= 0) return;
+  const i = (y * W + x) * 3;
+  px[i] = Math.round(px[i] * (1 - a) + c[0] * a);
+  px[i + 1] = Math.round(px[i + 1] * (1 - a) + c[1] * a);
+  px[i + 2] = Math.round(px[i + 2] * (1 - a) + c[2] * a);
 }
 
-function drawGlyph(code: number, x: number, y: number, scale: number, c: RGB): void {
-  const g = FONT[code - 32] ?? FONT[0];
-  for (let r = 0; r < 7; r++) {
-    const row = g[r];
-    for (let col = 0; col < 5; col++) {
-      if (row & (1 << (4 - col))) fillRect(x + col * scale, y + r * scale, scale, scale, c);
+// Draw one glyph's ink at (x, yTop) in em size `size`; returns advance px.
+function drawGlyphAA(code: number, x: number, yTop: number, size: number, c: RGB, bold: boolean): number {
+  const g = GLYPHS[code - 32];
+  if (!g) return 0;
+  const f = size / ATLAS_SIZE;
+  const adv = g.adv * f;
+  if (g.w === 0 || g.h === 0) return adv;
+  const ix = x + g.xOff * f;
+  const iy = yTop + g.yOff * f;
+  const iw = g.w * f;
+  const ih = g.h * f;
+  const dx = bold ? Math.max(1, Math.round(size * 0.05)) : 0;
+  const x0 = Math.floor(ix);
+  const x1 = Math.ceil(ix + iw);
+  const y0 = Math.floor(iy);
+  const y1 = Math.ceil(iy + ih);
+  for (let py = y0; py < y1; py++) {
+    for (let pxp = x0; pxp < x1; pxp++) {
+      let cov = 0;
+      for (let sy = 0; sy < 3; sy++) {
+        for (let sx = 0; sx < 3; sx++) {
+          const gx = Math.floor((pxp + (sx + 0.5) / 3 - ix) / f);
+          const gy = Math.floor((py + (sy + 0.5) / 3 - iy) / f);
+          if (gx >= 0 && gx < g.w && gy >= 0 && gy < g.h && g.bits[gy * g.w + gx]) cov++;
+        }
+      }
+      if (cov === 0) continue;
+      const a = cov / 9;
+      blendPixel(pxp, py, c, a);
+      if (dx > 0) blendPixel(pxp + dx, py, c, a * 0.85);
     }
   }
+  return adv;
 }
 
-function drawText(s: string, x: number, y: number, scale: number, c: RGB, bold = false): void {
-  let cx = x;
-  const thick = scale >= 4 ? 2 : 1;
+function glyphAdvance(code: number, size: number): number {
+  const g = GLYPHS[code - 32];
+  return g ? (g.adv * size) / ATLAS_SIZE : 0;
+}
+
+// Ink width of a string (advances minus the last glyph's right bearing).
+function textWidth(s: string, size: number): number {
+  if (s.length === 0) return 0;
+  let w = 0;
+  let last = 32;
   for (const ch of s) {
     const code = ch.charCodeAt(0);
     if (code >= 32 && code <= 126) {
-      drawGlyph(code, cx, y, scale, c);
-      if (bold) drawGlyph(code, cx + thick, y, scale, c);
+      w += glyphAdvance(code, size);
+      last = code;
+    } else {
+      w += glyphAdvance(32, size);
     }
-    cx += 6 * scale;
+  }
+  const g = GLYPHS[last - 32];
+  if (g) w -= ((g.adv - (g.xOff + g.w)) * size) / ATLAS_SIZE;
+  return w;
+}
+
+function drawText(s: string, x: number, y: number, size: number, c: RGB, bold = false): void {
+  let cx = x;
+  for (const ch of s) {
+    const code = ch.charCodeAt(0);
+    if (code >= 32 && code <= 126) {
+      cx += drawGlyphAA(code, cx, y, size, c, bold);
+    } else {
+      cx += glyphAdvance(32, size);
+    }
   }
 }
 
-function drawTextCentered(s: string, cx: number, y: number, scale: number, c: RGB, bold = false): void {
-  drawText(s, Math.round(cx - textWidth(s, scale) / 2), y, scale, c, bold);
+function drawTextCentered(s: string, cx: number, y: number, size: number, c: RGB, bold = false): void {
+  drawText(s, Math.round(cx - textWidth(s, size) / 2), y, size, c, bold);
 }
 
-function drawTextRight(s: string, right: number, y: number, scale: number, c: RGB, bold = false): void {
-  drawText(s, right - textWidth(s, scale), y, scale, c, bold);
+function drawTextRight(s: string, right: number, y: number, size: number, c: RGB, bold = false): void {
+  drawText(s, right - textWidth(s, size), y, size, c, bold);
+}
+
+// Centered text that shrinks until it fits maxWidth (never overflows).
+function drawTextCenteredFit(s: string, cx: number, y: number, size: number, c: RGB, bold: boolean, maxWidth: number): void {
+  let sz = size;
+  while (sz > 8 && textWidth(s, sz) > maxWidth) sz -= 0.5;
+  drawTextCentered(s, cx, y, sz, c, bold);
 }
 
 // Greedy word wrap to a pixel width. Long words are hard-split.
-function wrap(s: string, maxWidth: number, scale: number): string[] {
+function wrap(s: string, maxWidth: number, size: number): string[] {
   const words = s.split(' ');
   const lines: string[] = [];
   let cur = '';
   for (const w of words) {
     const test = cur === '' ? w : cur + ' ' + w;
-    if (textWidth(test, scale) <= maxWidth) {
+    if (textWidth(test, size) <= maxWidth) {
       cur = test;
     } else {
       if (cur !== '') lines.push(cur);
-      if (textWidth(w, scale) > maxWidth) {
+      if (textWidth(w, size) > maxWidth) {
         let rest = w;
-        while (textWidth(rest, scale) > maxWidth) {
+        while (textWidth(rest, size) > maxWidth) {
           let n = 1;
-          while (n < rest.length && textWidth(rest.slice(0, n + 1), scale) <= maxWidth) n++;
+          while (n < rest.length && textWidth(rest.slice(0, n + 1), size) <= maxWidth) n++;
           lines.push(rest.slice(0, n));
           rest = rest.slice(n);
         }
@@ -363,13 +375,16 @@ function wrap(s: string, maxWidth: number, scale: number): string[] {
   return lines;
 }
 
-function drawWrapped(s: string, x: number, y: number, maxWidth: number, scale: number, c: RGB, bold = false, lineGap = 3): number {
-  // '\n' forces a line break; each segment is then word-wrapped.
-  const lines = s.split('\n').flatMap((seg) => wrap(seg, maxWidth, scale));
+// '\n' forces a line break; each segment is then word-wrapped.
+// lineHeight defaults to a generous 1.3x (small cards must breathe).
+// Returns the y just past the last line.
+function drawWrapped(s: string, x: number, y: number, maxWidth: number, size: number, c: RGB, bold = false, lineHeight = 0): number {
+  const lh = lineHeight > 0 ? lineHeight : Math.round(size * 1.3);
+  const lines = s.split('\n').flatMap((seg) => wrap(seg, maxWidth, size));
   let yy = y;
   for (const ln of lines) {
-    drawText(ln, x, yy, scale, c, bold);
-    yy += 7 * scale + lineGap;
+    drawText(ln, x, yy, size, c, bold);
+    yy += lh;
   }
   return yy;
 }
@@ -425,7 +440,7 @@ function drawCop31(x: number, y: number, w: number, h: number): void {
   for (let i = 0; i < 4; i++) fillRect(x + 160 + i * 38, y + 60, 16, 18, NAVY); // chairs
   fillRect(x + 14, y + 12, 44, 26, WHITE); // clock plate
   strokeRect(x + 14, y + 12, 44, 26, 2, INK);
-  drawText('03:00', x + 19, y + 18, 1, INK, true);
+  drawText('03:00', x + 19, y + 17, 10, INK, true);
 }
 
 // Hero 2 illustration: Bahrain radars at night — gradient night sky,
@@ -452,7 +467,7 @@ function drawBahrain(x: number, y: number, w: number, h: number): void {
   triangle(x + 250, y + h - 26, x + 268, y + h - 58, x + 286, y + h - 26, RED); // fire
   triangle(x + 262, y + h - 26, x + 272, y + h - 46, x + 282, y + h - 26, GOLD);
   fillVGrad(x, y + h - 26, w, 26, [192, 36, 40], [160, 26, 32]); // DENIED bar
-  drawTextCentered('DENIED', x + w / 2, y + h - 20, 2, WHITE, true);
+  drawTextCentered('DENIED', x + w / 2, y + h - 22, 16, WHITE, true);
 }
 
 // Hero 3 illustration: Kyiv night — gradient night sky, stars, moon,
@@ -528,7 +543,7 @@ function iconBallot(x: number, y: number): void {
   fillRect(x + 4, y + 12, 20, 12, NAVY);
   fillRect(x + 8, y + 15, 12, 2, PAPER);
   fillRect(x + 10, y + 4, 8, 8, RED);
-  drawText('X', x + 12, y + 5, 1, WHITE, true);
+  drawText('X', x + 12, y + 4, 9, WHITE, true);
 }
 function iconCricket(x: number, y: number): void {
   circle(x + 20, y + 8, 6, RED);
@@ -580,8 +595,7 @@ const SMALLS: Small[] = [
 ];
 
 // Numbers-strip labels: one line each, verified against the news file.
-// (Interim rendering at scale 1; the serif pass renders these at 12 px
-// over two lines with the fuller wording. Wording below is final.)
+// Rendered at 12 px serif under each number. Wording below is final.
 const NUM_LABELS: string[] = [
   'drones fired at Ukraine',
   'downed or suppressed',
@@ -591,7 +605,7 @@ const NUM_LABELS: string[] = [
   'Wembanyama points',
 ];
 
-// The ALSO list: stories 14-28, one line each.
+// The ALSO list: stories 14-35, one line each.
 const ALSO: string[] = [
   '14. Korea minister quits',
   '15. Dems take 258 seats',
@@ -608,6 +622,13 @@ const ALSO: string[] = [
   '26. Peru toll: 1 dead',
   '27. Estonia closes border',
   '28. Poland: assassin plot',
+  '29. RSF drones hit Khartoum',
+  '30. Australia flags AI threat',
+  '31. NZ minister takes leave',
+  '32. West Bank settler arson',
+  '33. Lebanon seizes explosives',
+  '34. Liverpool 4-0 Man Utd',
+  '35. Malema: Mayibuye claim',
 ];
 
 // Dot-matrix world map: 40 columns x 15 rows, '#' = land.
@@ -632,59 +653,62 @@ const MAP: string[] = [
 const PINS: Array<[number, number]> = [
   [22, 3], [22, 4], [24, 5], [21, 2], [27, 5],
   [33, 3], [32, 5], [6, 4], [9, 9], [36, 12], [4, 5],
+  [25, 7], [34, 12], [37, 13], [21, 5], [24, 4], [18, 2], [22, 10],
 ];
 
 // ------------------------------------------------------------------ layout
 // Page geometry (1024x1024, margin 24, inner width 976):
-//   masthead 24..150 | UTC strip 156..192 | numbers 200..228
-//   heroes 238..476 | small cards 486..596 + 606..716
-//   map + ALSO 726..872 | DATE CHECK 882..960 | footer 968..1014
+//   masthead 24..158 | UTC strip 164..196 | numbers 198..252
+//   heroes 258..490 | small cards 498..608 + 616..726
+//   map + ALSO 734..876 | DATE CHECK 884..962 | footer 966..1010
+// All text is measured before it is drawn (textWidth / wrap); centered
+// titles use drawTextCenteredFit so nothing overflows its band.
 
 function render(): void {
   fillRect(0, 0, W, H, PAPER);
   strokeRect(8, 8, 1008, 1008, 3, INK);
 
   // ---- masthead
-  drawTextCentered('THE WORLD IN ONE DAY', 512, 28, 2, NAVY, true);
-  drawTextCentered('Sunday 22 November 2026', 512, 48, 6, INK, true);
-  drawTextCentered('28 stories | 7 regions | every one dated Sunday 22 November 2026', 512, 98, 2, INK);
-  fillVGrad(24, 120, 976, 28, [192, 36, 40], [160, 26, 32]); // red strip
-  drawTextCentered('186 DRONES OVER UKRAINE | COP31: NO FOSSIL FUELS | IRAN CLAIM, BAHRAIN DENIAL', 512, 127, 2, WHITE, true);
+  drawTextCentered('THE WORLD IN ONE DAY', 512, 26, 34, NAVY, true);
+  drawTextCentered('Sunday 22 November 2026', 512, 64, 40, INK, true);
+  drawTextCentered('35 stories | 7 regions | every one dated Sunday 22 November 2026', 512, 112, 14, INK);
+  fillVGrad(24, 128, 976, 30, [192, 36, 40], [160, 26, 32]); // red strip
+  drawTextCenteredFit('186 DRONES OVER UKRAINE | COP31: NO FOSSIL FUELS | IRAN CLAIM, BAHRAIN DENIAL', 512, 133, 14, WHITE, true, 950);
 
   // ---- THE DAY IN UTC strip (timed items, all verified 22 Nov)
-  drawTextCentered('THE DAY IN UTC -- 03:00 COP31 objections close | 04:01 AP: talks end', 512, 158, 2, NAVY, true);
-  drawTextCentered('13:53 Sparta II still burning | 14:37 UN News: no pact | overnight: 186 drones', 512, 176, 2, NAVY);
+  drawTextCentered('THE DAY IN UTC -- 03:00 COP31 objections close | 04:01 AP: talks end', 512, 166, 13, NAVY, true);
+  drawTextCentered('13:53 Sparta II still burning | 14:37 UN News: no pact | 15:03 Khartoum drones | 17:22 Lebanon seizure', 512, 184, 13, NAVY);
 
   // ---- numbers strip: six numbers, each with a one-line label underneath.
   const numVals = ['186', '161', '35%', '$120bn', '720/9', '50'];
   const colW = 976 / 6;
   for (let i = 0; i < 6; i++) {
     const cx = 24 + colW * (i + 0.5);
-    drawTextCentered(numVals[i], cx, 194, 3, NAVY, true);
-    drawTextCentered(NUM_LABELS[i], cx, 220, 1, INK);
+    drawTextCentered(numVals[i], cx, 198, 30, NAVY, true);
+    drawTextCenteredFit(NUM_LABELS[i], cx, 232, 12, INK, false, colW - 6);
   }
-  hline(24, 1000, 232, 2, INK);
+  hline(24, 1000, 252, 2, INK);
 
   // ---- 3 hero cards
   const heroXs = [24, 352, 680];
   for (let i = 0; i < 3; i++) {
     const hero = HEROES[i];
     const x = heroXs[i];
-    const y = 238;
+    const y = 258;
     const w = 320;
-    const h = 238;
+    const h = 232;
     fillRect(x, y, w, h, CARD);
     strokeRect(x, y, w, h, 2, INK);
-    hero.draw(x + 2, y + 2, w - 4, 106);
-    drawText(hero.kicker, x + 10, y + 114, 2, RED, true);
-    drawWrapped(hero.head, x + 10, y + 134, w - 20, 3, INK, true, 2);
-    drawWrapped(hero.sum, x + 10, y + 184, w - 20, 2, INK, false, 2);
-    drawText(hero.tag, x + 10, y + 220, 2, NAVY, true);
+    hero.draw(x + 2, y + 2, w - 4, 104);
+    drawText(hero.kicker, x + 10, y + 112, 12, RED, true);
+    drawWrapped(hero.head, x + 10, y + 130, w - 20, 22, INK, true, 25);
+    drawWrapped(hero.sum, x + 10, y + 182, w - 20, 13, INK, false, 17);
+    drawText(hero.tag, x + 10, y + 218, 11, NAVY, true);
   }
 
   // ---- 10 small cards, 2 rows x 5
   const smallXs = [24, 221, 418, 615, 812];
-  const smallYs = [486, 606];
+  const smallYs = [498, 616];
   for (let r = 0; r < 2; r++) {
     for (let c = 0; c < 5; c++) {
       const s = SMALLS[r * 5 + c];
@@ -695,17 +719,17 @@ function render(): void {
       fillRect(x, y, w, h, CARD);
       strokeRect(x, y, w, h, 2, INK);
       s.drawIcon(x + w - 36, y + 4);
-      drawText(`${s.num} ${s.kicker}`, x + 8, y + 10, 2, RED, true);
-      drawWrapped(s.head, x + 8, y + 28, 173, 2, INK, true, 2);
-      drawWrapped(s.sub, x + 8, y + 62, 173, 2, INK, false, 2);
-      drawText(s.tag, x + 8, y + 94, 2, NAVY, true);
+      drawText(`${s.num} ${s.kicker}`, x + 8, y + 8, 11, RED, true);
+      drawWrapped(s.head, x + 8, y + 24, 173, 15, INK, true, 18);
+      drawWrapped(s.sub, x + 8, y + 60, 173, 12, INK, false, 15);
+      drawText(s.tag, x + 8, y + 94, 11, NAVY, true);
     }
   }
 
-  // ---- world map + ALSO list
-  drawText('WHERE IT HAPPENED', 24, 730, 2, NAVY, true);
+  // ---- world map + ALSO list (22 more stories, 3 columns)
+  drawText('WHERE IT HAPPENED', 24, 734, 14, NAVY, true);
   const mapX = 44;
-  const mapY = 754;
+  const mapY = 756;
   const cell = 7;
   for (let r = 0; r < MAP.length; r++) {
     const row = MAP[r].padEnd(40, '.').slice(0, 40);
@@ -716,22 +740,28 @@ function render(): void {
   for (const [pc, pr] of PINS) {
     circle(mapX + pc * cell + 2, mapY + pr * cell + 2, 4, RED);
   }
-  drawText('ALSO ON SUNDAY 22 NOVEMBER -- 15 MORE STORIES', 352, 730, 2, NAVY, true);
-  for (let i = 0; i < 8; i++) drawText(ALSO[i], 352, 752 + i * 16, 2, INK);
-  for (let i = 0; i < 7; i++) drawText(ALSO[8 + i], 680, 752 + i * 16, 2, INK);
+  drawText('ALSO ON SUNDAY 22 NOVEMBER -- 22 MORE STORIES', 352, 734, 14, NAVY, true);
+  const alsoXs = [352, 568, 784];
+  for (let col = 0; col < 3; col++) {
+    for (let i = 0; i < 8; i++) {
+      const idx = col * 8 + i;
+      if (idx >= ALSO.length) break;
+      drawText(ALSO[idx], alsoXs[col], 756 + i * 15, 12, INK);
+    }
+  }
 
   // ---- DATE CHECK (red border, judge-addressed: what we left out, on purpose)
-  strokeRect(24, 882, 976, 78, 3, RED);
-  drawText('DATE CHECK -- TO THE JUDGE: WHAT WE LEFT OUT ON PURPOSE', 36, 890, 2, RED, true);
+  strokeRect(24, 884, 976, 78, 3, RED);
+  drawText('DATE CHECK -- TO THE JUDGE: WHAT WE LEFT OUT ON PURPOSE', 36, 892, 13, RED, true);
   drawWrapped(
     'El Chapo captured (Fri 21 Nov) | EU-Indonesia pact (Sat 21 Nov) | Bayelsa boat, 24 dead (Fri 21 Nov) | Peru quake (Fri 20 Nov) | 400-drone barrage (19-20 Nov). Tonight\'s real count: 186 drones, at the top of this page.',
-    36, 908, 952, 2, INK, false, 2,
+    36, 910, 952, 13, INK, false, 17,
   );
 
   // ---- footer: certainty legend + sources
-  drawTextCentered('CONFIRMED = 2+ outlets | OFFICIAL = on the record', 512, 968, 2, INK);
-  drawTextCentered('REPORTED = one outlet | CLAIM = one side\'s account', 512, 984, 2, INK);
-  drawTextCentered('Sources: AP, Reuters, BBC, UN News, Al Jazeera, Guardian | Original drawings', 512, 1000, 2, INK);
+  drawTextCentered('CONFIRMED = 2+ outlets | OFFICIAL = on the record', 512, 966, 12, INK);
+  drawTextCentered('REPORTED = one outlet | CLAIM = one side\'s account', 512, 981, 12, INK);
+  drawTextCentered('Sources: AP, Reuters, BBC, UN News, Al Jazeera, Guardian, RNZ, ABC News | Original drawings', 512, 996, 12, INK);
 }
 
 // --------------------------------------------------------------------- main
