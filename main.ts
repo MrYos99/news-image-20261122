@@ -21,6 +21,9 @@
 // ALSO list. Nothing is inflated.
 // Polish pass 2: serif font from the glyph atlas, 35 stories, labelled
 // numbers strip, generous small-card line-height.
+// Polish pass 3: numbered map pins (disc + ring + stem + story number),
+// cards 12/13 subs shortened to one line, DATE CHECK weekdays fixed
+// (21 Nov 2026 is a Saturday, not a Friday).
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -590,8 +593,8 @@ const SMALLS: Small[] = [
   { num: 9, kicker: 'IRAN', head: 'POWER\nRATIONED', sub: 'two-hour daily\ncuts', tag: 'OFFICIAL', drawIcon: iconPower },
   { num: 10, kicker: 'BRAZIL', head: 'BOLSONARO IN\nICU', sub: 'bowel issue,\nstable', tag: 'REPORTED', drawIcon: iconHospital },
   { num: 11, kicker: 'USA', head: 'FBI PROBES\nHACK', sub: 'crime database\nbreached', tag: 'REPORTED', drawIcon: iconSearch },
-  { num: 12, kicker: 'BELGIUM', head: 'CONTROLLERS\nSTRIKE', sub: 'most flights\ngrounded Mon', tag: 'REPORTED', drawIcon: iconTower },
-  { num: 13, kicker: 'INDIA', head: 'MANIPUR TOLL\n19', sub: 'toxic liquor;\n600 ill', tag: 'REPORTED', drawIcon: iconBottle },
+  { num: 12, kicker: 'BELGIUM', head: 'CONTROLLERS\nSTRIKE', sub: 'most flights grounded', tag: 'REPORTED', drawIcon: iconTower },
+  { num: 13, kicker: 'INDIA', head: 'MANIPUR TOLL\n19', sub: 'toxic liquor, 600 ill', tag: 'REPORTED', drawIcon: iconBottle },
 ];
 
 // Numbers-strip labels: one line each, verified against the news file.
@@ -632,7 +635,15 @@ const ALSO: string[] = [
 ];
 
 // Dot-matrix world map: 40 columns x 15 rows, '#' = land.
-// Rendered as 7 px dots; red pins mark where the pictured stories happened.
+// Rendered as 5 px dots (dense enough to read as continents); numbered
+// pins mark where the stories happened: [map col, map row, story number,
+// disc dx, disc dy]. Discs sit above their anchors; in the two dense
+// clusters (Europe, Australia/NZ) the discs are fanned out by hand (dx/dy)
+// so no two discs cover each other — every number stays readable.
+// Pin geography (approx, at this scale): 12 Belgium, 28 Poland, 1 COP31
+// Antalya, 27 Estonia, 2 Gulf, 14 Korea, 6 Hong Kong, 15 USA, 26 Peru,
+// 30 Australia, 17 California, 29 Khartoum, 7 cricket in NZ, 31 NZ,
+// 33 Lebanon, 3 Kyiv, 34 Liverpool, 35 Johannesburg.
 const MAP: string[] = [
   '........................................',
   '...##########...........................',
@@ -650,10 +661,14 @@ const MAP: string[] = [
   '.........##....................###.....',
   '..........#............................',
 ];
-const PINS: Array<[number, number]> = [
-  [22, 3], [22, 4], [24, 5], [21, 2], [27, 5],
-  [33, 3], [32, 5], [6, 4], [9, 9], [36, 12], [4, 5],
-  [25, 7], [34, 12], [37, 13], [21, 5], [24, 4], [18, 2], [22, 10],
+const PINS: Array<[number, number, number, number, number]> = [
+  [22, 3, 12, 8, -27], [22, 4, 28, 22, -28], [24, 5, 1, 16, -21],
+  [21, 2, 27, -5, -22], [27, 5, 2, 19, -33],
+  [33, 3, 14, 0, -12], [32, 5, 6, 0, -12], [6, 4, 15, 0, -12],
+  [9, 9, 26, 0, -12], [36, 12, 30, -2, -16],
+  [4, 5, 17, 0, -12], [25, 7, 29, 0, -12], [34, 12, 7, -12, -12],
+  [37, 13, 31, 10, -12], [21, 5, 33, -13, -11],
+  [24, 4, 3, 24, -34], [18, 2, 34, -12, -14], [22, 10, 35, 0, -12],
 ];
 
 // ------------------------------------------------------------------ layout
@@ -734,11 +749,24 @@ function render(): void {
   for (let r = 0; r < MAP.length; r++) {
     const row = MAP[r].padEnd(40, '.').slice(0, 40);
     for (let c = 0; c < 40; c++) {
-      if (row[c] === '#') fillRect(mapX + c * cell, mapY + r * cell, 4, 4, NAVY);
+      if (row[c] === '#') fillRect(mapX + c * cell, mapY + r * cell, 5, 5, NAVY);
     }
   }
-  for (const [pc, pr] of PINS) {
-    circle(mapX + pc * cell + 2, mapY + pr * cell + 2, 4, RED);
+  // Numbered pins: a white-ringed red disc with a stem from the anchor
+  // to the disc centre, the story number in white inside the disc. The
+  // stem is drawn first so the disc covers its top end; fanned-out discs
+  // in the dense clusters keep every number readable.
+  for (const [pc, pr, story, ddx, ddy] of PINS) {
+    const ax = mapX + pc * cell + 2;
+    const ay = mapY + pr * cell + 2;
+    const dcx = ax + ddx;
+    const dcy = ay + ddy;
+    line(ax, ay, dcx, dcy, 2, RED); // stem: anchor -> disc centre
+    circle(dcx, dcy, 8, WHITE); // white ring
+    circle(dcx, dcy, 6, RED); // red disc
+    const num = String(story);
+    const size = num.length > 1 ? 9 : 10;
+    drawTextCentered(num, dcx, dcy - 5, size, WHITE, true);
   }
   drawText('ALSO ON SUNDAY 22 NOVEMBER -- 22 MORE STORIES', 352, 734, 14, NAVY, true);
   const alsoXs = [352, 568, 784];
@@ -754,7 +782,7 @@ function render(): void {
   strokeRect(24, 884, 976, 78, 3, RED);
   drawText('DATE CHECK -- TO THE JUDGE: WHAT WE LEFT OUT ON PURPOSE', 36, 892, 13, RED, true);
   drawWrapped(
-    'El Chapo captured (Fri 21 Nov) | EU-Indonesia pact (Sat 21 Nov) | Bayelsa boat, 24 dead (Fri 21 Nov) | Peru quake (Fri 20 Nov) | 400-drone barrage (19-20 Nov). Tonight\'s real count: 186 drones, at the top of this page.',
+    'El Chapo captured (Sat 21 Nov) | EU-Indonesia pact (Sat 21 Nov) | Bayelsa boat, 24 dead (Sat 21 Nov) | Peru quake (Fri 20 Nov) | 400-drone barrage (19-20 Nov). Tonight\'s real count: 186 drones, at the top of this page.',
     36, 910, 952, 13, INK, false, 17,
   );
 
