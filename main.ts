@@ -16,8 +16,11 @@
 //
 // Facts come only from the verified news file of 22 Nov 2026. Every claim
 // carries a certainty tag (CONFIRMED / OFFICIAL / REPORTED / CLAIM).
-// The honest count is 26 stories: 3 heroes + 10 small cards + 13 in the
+// The honest count is 28 stories: 3 heroes + 10 small cards + 15 in the
 // ALSO list. Nothing is inflated.
+// Polish pass 1 (interim): gradient hero skies, richer hero art, labelled
+// numbers strip, 28 stories. The serif-font pass lands after the harness
+// verdict on PIL; the 5x7 bitmap font below is replaced then.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -54,6 +57,20 @@ function fillRect(x: number, y: number, w: number, h: number, c: RGB): void {
   const y1 = Math.min(H, Math.ceil(y + h));
   for (let yy = y0; yy < y1; yy++) {
     for (let xx = x0; xx < x1; xx++) setPixel(xx, yy, c);
+  }
+}
+
+// Vertical linear gradient (per-row lerp). Used for hero skies and the
+// red strip: flat vector stays, but light now has a direction.
+function fillVGrad(x: number, y: number, w: number, h: number, cTop: RGB, cBot: RGB): void {
+  for (let yy = 0; yy < h; yy++) {
+    const t = h <= 1 ? 0 : yy / (h - 1);
+    const c: RGB = [
+      Math.round(cTop[0] + (cBot[0] - cTop[0]) * t),
+      Math.round(cTop[1] + (cBot[1] - cTop[1]) * t),
+      Math.round(cTop[2] + (cBot[2] - cTop[2]) * t),
+    ];
+    fillRect(x, y + yy, w, 1, c);
   }
 }
 
@@ -379,13 +396,31 @@ interface Small {
   drawIcon: (x: number, y: number) => void;
 }
 
-// Hero 1 illustration: COP31 at dawn in Antalya — sun, globe, table, clock.
+// Hero 1 illustration: COP31 at dawn in Antalya — gradient dawn sky,
+// sun with rays, globe with meridian/equator, flags, table, clock 03:00.
 function drawCop31(x: number, y: number, w: number, h: number): void {
-  fillRect(x, y, w, h, SKY);
-  circle(x + w - 52, y + 30, 18, GOLD); // dawn sun
+  fillVGrad(x, y, w, h, [242, 216, 160], [214, 228, 240]); // dawn gold -> pale blue
+  const sunX = x + w - 52;
+  const sunY = y + 30;
+  for (let a = 0; a < 8; a++) { // sun rays
+    const ang = (a * Math.PI) / 4;
+    line(Math.round(sunX + Math.cos(ang) * 22), Math.round(sunY + Math.sin(ang) * 22),
+      Math.round(sunX + Math.cos(ang) * 30), Math.round(sunY + Math.sin(ang) * 30), 2, GOLD);
+  }
+  circle(sunX, sunY, 18, GOLD);
   circle(x + 92, y + 50, 26, NAVY); // globe
   ellipse(x + 84, y + 42, 11, 5, PAPER);
   ellipse(x + 102, y + 58, 9, 4, PAPER);
+  ring(x + 92, y + 50, 26, 2, PAPER); // globe outline
+  vline(x + 92, y + 24, y + 76, 2, PAPER); // meridian
+  hline(x + 66, x + 118, y + 50, 2, PAPER); // equator
+  // Three flags behind the table (conference).
+  const flagCols: RGB[] = [NAVY, RED, GOLD];
+  for (let i = 0; i < 3; i++) {
+    const fx = x + 148 + i * 34;
+    vline(fx, y + 40, y + 78, 2, INK);
+    fillRect(fx, y + 40, 26, 14, flagCols[i]);
+  }
   fillRect(x + 150, y + 78, 150, 6, INK); // negotiating table
   for (let i = 0; i < 4; i++) fillRect(x + 160 + i * 38, y + 60, 16, 18, NAVY); // chairs
   fillRect(x + 14, y + 12, 44, 26, WHITE); // clock plate
@@ -393,38 +428,60 @@ function drawCop31(x: number, y: number, w: number, h: number): void {
   drawText('03:00', x + 19, y + 18, 1, INK, true);
 }
 
-// Hero 2 illustration: Bahrain radars at night — dishes, fire, DENIED bar.
+// Hero 2 illustration: Bahrain radars at night — gradient night sky,
+// stars, moon, two dishes with sweep lines, skyline, fire, DENIED bar.
 function drawBahrain(x: number, y: number, w: number, h: number): void {
-  fillRect(x, y, w, h, DARKNAVY);
+  fillVGrad(x, y, w, h, [13, 21, 38], [29, 58, 110]); // deep night -> navy
+  const stars: Array<[number, number]> = [[20, 10], [52, 22], [120, 8], [160, 16], [240, 10], [305, 12], [36, 40], [140, 30]];
+  for (const [sx, sy] of stars) fillRect(x + sx, y + sy, 2, 2, WHITE);
+  circle(x + w - 40, y + 22, 11, PAPER); // moon
+  ring(x + w - 40, y + 22, 14, 2, GOLD); // moon glow
   ring(x + 84, y + 46, 26, 3, WHITE); // radar dish 1
   line(x + 84, y + 46, x + 108, y + 22, 3, WHITE);
   circle(x + 108, y + 22, 4, WHITE);
+  line(x + 84, y + 46, x + 62, y + 26, 2, WHITE); // sweep
   ring(x + 200, y + 52, 20, 3, WHITE); // radar dish 2
   line(x + 200, y + 52, x + 218, y + 32, 3, WHITE);
   circle(x + 218, y + 32, 4, WHITE);
+  line(x + 200, y + 52, x + 182, y + 34, 2, WHITE); // sweep
+  // Skyline silhouette behind the fire.
+  fillRect(x + 8, y + h - 48, 40, 22, INK);
+  fillRect(x + 56, y + h - 56, 34, 30, INK);
+  for (let i = 0; i < 3; i++) fillRect(x + 14 + i * 12, y + h - 42, 4, 4, GOLD);
+  for (let i = 0; i < 2; i++) fillRect(x + 62 + i * 12, y + h - 50, 4, 4, GOLD);
   triangle(x + 250, y + h - 26, x + 268, y + h - 58, x + 286, y + h - 26, RED); // fire
   triangle(x + 262, y + h - 26, x + 272, y + h - 46, x + 282, y + h - 26, GOLD);
-  fillRect(x, y + h - 26, w, 26, RED); // DENIED bar
+  fillVGrad(x, y + h - 26, w, 26, [192, 36, 40], [160, 26, 32]); // DENIED bar
   drawTextCentered('DENIED', x + w / 2, y + h - 20, 2, WHITE, true);
 }
 
-// Hero 3 illustration: Kyiv night — stars, drones, a block, smoke, moon.
+// Hero 3 illustration: Kyiv night — gradient night sky, stars, moon,
+// five drone silhouettes, two blocks (one hit and burning), smoke.
 function drawKyiv(x: number, y: number, w: number, h: number): void {
-  fillRect(x, y, w, h, DARKNAVY);
+  fillVGrad(x, y, w, h, [10, 17, 32], [29, 58, 110]); // deep night -> navy
   const stars: Array<[number, number]> = [[30, 14], [70, 26], [130, 10], [180, 20], [230, 12], [280, 24], [50, 44], [150, 34], [210, 44], [260, 40]];
   for (const [sx, sy] of stars) fillRect(x + sx, y + sy, 3, 3, WHITE);
   circle(x + w - 44, y + 26, 14, PAPER); // moon
-  // Three drone silhouettes (small X shapes).
-  for (const [dx, dy] of [[60, 58], [150, 48], [230, 62]] as Array<[number, number]>) {
+  ring(x + w - 44, y + 26, 17, 2, GOLD); // moon glow
+  // Five drone silhouettes (small X shapes).
+  for (const [dx, dy] of [[90, 58], [150, 48], [230, 62], [120, 70], [270, 52]] as Array<[number, number]>) {
     line(x + dx - 8, y + dy - 8, x + dx + 8, y + dy + 8, 2, WHITE);
     line(x + dx + 8, y + dy - 8, x + dx - 8, y + dy + 8, 2, WHITE);
+  }
+  // Second block, standing.
+  fillRect(x + 190, y + h - 40, 72, 40, GREY);
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) fillRect(x + 198 + c * 22, y + h - 34 + r * 11, 8, 6, GOLD);
   }
   fillRect(x + 30, y + h - 34, 96, 34, GREY); // five-storey block
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 4; c++) fillRect(x + 40 + c * 22, y + h - 28 + r * 10, 8, 6, GOLD);
   }
-  circle(x + 60, y + h - 44, 9, GREY); // smoke
-  circle(x + 82, y + h - 52, 12, GREY);
+  triangle(x + 40, y + h - 34, x + 58, y + h - 58, x + 76, y + h - 34, RED); // fire on the hit block
+  triangle(x + 50, y + h - 34, x + 58, y + h - 50, x + 66, y + h - 34, GOLD);
+  circle(x + 60, y + h - 64, 9, GREY); // smoke
+  circle(x + 82, y + h - 72, 12, GREY);
+  circle(x + 104, y + h - 66, 8, GREY);
 }
 
 const HEROES: Hero[] = [
@@ -522,7 +579,19 @@ const SMALLS: Small[] = [
   { num: 13, kicker: 'INDIA', head: 'MANIPUR TOLL\n19', sub: 'toxic liquor;\n600 ill', tag: 'REPORTED', drawIcon: iconBottle },
 ];
 
-// The ALSO list: stories 14-26, one line each.
+// Numbers-strip labels: one line each, verified against the news file.
+// (Interim rendering at scale 1; the serif pass renders these at 12 px
+// over two lines with the fuller wording. Wording below is final.)
+const NUM_LABELS: string[] = [
+  'drones fired at Ukraine',
+  'downed or suppressed',
+  'electricity goal 2035',
+  'adaptation target dropped',
+  "India's record Test total",
+  'Wembanyama points',
+];
+
+// The ALSO list: stories 14-28, one line each.
 const ALSO: string[] = [
   '14. Korea minister quits',
   '15. Dems take 258 seats',
@@ -537,6 +606,8 @@ const ALSO: string[] = [
   '24. Verstappen wins Vegas',
   '25. Cikande factory fire',
   '26. Peru toll: 1 dead',
+  '27. Estonia closes border',
+  '28. Poland: assassin plot',
 ];
 
 // Dot-matrix world map: 40 columns x 15 rows, '#' = land.
@@ -576,17 +647,23 @@ function render(): void {
   // ---- masthead
   drawTextCentered('THE WORLD IN ONE DAY', 512, 28, 2, NAVY, true);
   drawTextCentered('Sunday 22 November 2026', 512, 48, 6, INK, true);
-  drawTextCentered('26 stories | 7 regions | every one dated Sunday 22 November 2026', 512, 98, 2, INK);
-  fillRect(24, 120, 976, 28, RED);
+  drawTextCentered('28 stories | 7 regions | every one dated Sunday 22 November 2026', 512, 98, 2, INK);
+  fillVGrad(24, 120, 976, 28, [192, 36, 40], [160, 26, 32]); // red strip
   drawTextCentered('186 DRONES OVER UKRAINE | COP31: NO FOSSIL FUELS | IRAN CLAIM, BAHRAIN DENIAL', 512, 127, 2, WHITE, true);
 
   // ---- THE DAY IN UTC strip (timed items, all verified 22 Nov)
   drawTextCentered('THE DAY IN UTC -- 03:00 COP31 objections close | 04:01 AP: talks end', 512, 158, 2, NAVY, true);
   drawTextCentered('13:53 Sparta II still burning | 14:37 UN News: no pact | overnight: 186 drones', 512, 176, 2, NAVY);
 
-  // ---- numbers strip
-  drawTextCentered('186 drones | 161 downed | 35% | $120bn | 720/9 | 50', 512, 200, 3, NAVY, true);
-  hline(24, 1000, 230, 2, INK);
+  // ---- numbers strip: six numbers, each with a one-line label underneath.
+  const numVals = ['186', '161', '35%', '$120bn', '720/9', '50'];
+  const colW = 976 / 6;
+  for (let i = 0; i < 6; i++) {
+    const cx = 24 + colW * (i + 0.5);
+    drawTextCentered(numVals[i], cx, 194, 3, NAVY, true);
+    drawTextCentered(NUM_LABELS[i], cx, 220, 1, INK);
+  }
+  hline(24, 1000, 232, 2, INK);
 
   // ---- 3 hero cards
   const heroXs = [24, 352, 680];
@@ -639,9 +716,9 @@ function render(): void {
   for (const [pc, pr] of PINS) {
     circle(mapX + pc * cell + 2, mapY + pr * cell + 2, 4, RED);
   }
-  drawText('ALSO ON SUNDAY 22 NOVEMBER -- 13 MORE STORIES', 352, 730, 2, NAVY, true);
-  for (let i = 0; i < 7; i++) drawText(ALSO[i], 352, 752 + i * 17, 2, INK);
-  for (let i = 0; i < 6; i++) drawText(ALSO[7 + i], 680, 752 + i * 17, 2, INK);
+  drawText('ALSO ON SUNDAY 22 NOVEMBER -- 15 MORE STORIES', 352, 730, 2, NAVY, true);
+  for (let i = 0; i < 8; i++) drawText(ALSO[i], 352, 752 + i * 16, 2, INK);
+  for (let i = 0; i < 7; i++) drawText(ALSO[8 + i], 680, 752 + i * 16, 2, INK);
 
   // ---- DATE CHECK (red border, judge-addressed: what we left out, on purpose)
   strokeRect(24, 882, 976, 78, 3, RED);
