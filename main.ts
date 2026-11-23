@@ -24,6 +24,11 @@
 // Polish pass 3: numbered map pins (disc + ring + stem + story number),
 // cards 12/13 subs shortened to one line, DATE CHECK weekdays fixed
 // (21 Nov 2026 is a Saturday, not a Friday).
+// Polish pass 4: richer hero art (clouds, 5 flags, delegates, documents;
+// third radar dish, sweep rings, wider skyline, searchlights, smoke;
+// background skyline, 7 drones, tracers, dark windows, broken roofline,
+// two-tone smoke) + paper halo under every map pin so no land dot
+// touches a pin number.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -419,28 +424,37 @@ interface Small {
 function drawCop31(x: number, y: number, w: number, h: number): void {
   fillVGrad(x, y, w, h, [242, 216, 160], [214, 228, 240]); // dawn gold -> pale blue
   const sunX = x + w - 52;
-  const sunY = y + 30;
-  for (let a = 0; a < 8; a++) { // sun rays
+  const sunY = y + 18;
+  for (let a = 0; a < 8; a++) { // sun rays (short: clear of the flags, start outside the disc)
     const ang = (a * Math.PI) / 4;
-    line(Math.round(sunX + Math.cos(ang) * 22), Math.round(sunY + Math.sin(ang) * 22),
-      Math.round(sunX + Math.cos(ang) * 30), Math.round(sunY + Math.sin(ang) * 30), 2, GOLD);
+    line(Math.round(sunX + Math.cos(ang) * 15), Math.round(sunY + Math.sin(ang) * 15),
+      Math.round(sunX + Math.cos(ang) * 19), Math.round(sunY + Math.sin(ang) * 19), 2, GOLD);
   }
-  circle(sunX, sunY, 18, GOLD);
+  circle(sunX, sunY, 14, GOLD);
+  ellipse(x + 30, y + 16, 15, 5, WHITE); // clouds
+  ellipse(x + 200, y + 12, 12, 4, WHITE);
+  ellipse(x + 216, y + 16, 9, 3, WHITE);
+  line(x + 250, y + 18, x + 254, y + 14, 2, INK); // birds
+  line(x + 254, y + 14, x + 258, y + 18, 2, INK);
+  line(x + 268, y + 24, x + 272, y + 20, 2, INK);
+  line(x + 272, y + 20, x + 276, y + 24, 2, INK);
   circle(x + 92, y + 50, 26, NAVY); // globe
   ellipse(x + 84, y + 42, 11, 5, PAPER);
   ellipse(x + 102, y + 58, 9, 4, PAPER);
   ring(x + 92, y + 50, 26, 2, PAPER); // globe outline
   vline(x + 92, y + 24, y + 76, 2, PAPER); // meridian
   hline(x + 66, x + 118, y + 50, 2, PAPER); // equator
-  // Three flags behind the table (conference).
-  const flagCols: RGB[] = [NAVY, RED, GOLD];
-  for (let i = 0; i < 3; i++) {
+  // Five flags behind the table (conference).
+  const flagCols: RGB[] = [NAVY, RED, GOLD, NAVY, RED];
+  for (let i = 0; i < 5; i++) {
     const fx = x + 148 + i * 34;
     vline(fx, y + 40, y + 78, 2, INK);
     fillRect(fx, y + 40, 26, 14, flagCols[i]);
   }
   fillRect(x + 150, y + 78, 150, 6, INK); // negotiating table
   for (let i = 0; i < 4; i++) fillRect(x + 160 + i * 38, y + 60, 16, 18, NAVY); // chairs
+  for (let i = 0; i < 4; i++) circle(x + 168 + i * 38, y + 53, 5, INK); // delegates
+  for (let i = 0; i < 4; i++) fillRect(x + 154 + i * 38, y + 74, 12, 4, WHITE); // documents
   fillRect(x + 14, y + 12, 44, 26, WHITE); // clock plate
   strokeRect(x + 14, y + 12, 44, 26, 2, INK);
   drawText('03:00', x + 19, y + 17, 10, INK, true);
@@ -462,13 +476,25 @@ function drawBahrain(x: number, y: number, w: number, h: number): void {
   line(x + 200, y + 52, x + 218, y + 32, 3, WHITE);
   circle(x + 218, y + 32, 4, WHITE);
   line(x + 200, y + 52, x + 182, y + 34, 2, WHITE); // sweep
+  ring(x + 30, y + 30, 12, 2, WHITE); // radar dish 3, upper left sky
+  line(x + 30, y + 30, x + 42, y + 18, 2, WHITE);
+  circle(x + 42, y + 18, 3, WHITE);
   // Skyline silhouette behind the fire.
   fillRect(x + 8, y + h - 48, 40, 22, INK);
   fillRect(x + 56, y + h - 56, 34, 30, INK);
   for (let i = 0; i < 3; i++) fillRect(x + 14 + i * 12, y + h - 42, 4, 4, GOLD);
   for (let i = 0; i < 2; i++) fillRect(x + 62 + i * 12, y + h - 50, 4, 4, GOLD);
+  fillRect(x + 104, y + h - 44, 30, 18, INK); // more towers
+  fillRect(x + 148, y + h - 52, 36, 26, INK);
+  for (let i = 0; i < 2; i++) fillRect(x + 110 + i * 12, y + h - 38, 4, 4, GOLD);
+  for (let i = 0; i < 3; i++) fillRect(x + 154 + i * 11, y + h - 46, 4, 4, GOLD);
+  fillRect(x + 296, y + h - 72, 8, 46, INK); // minaret
+  circle(x + 300, y + h - 74, 6, INK);
   triangle(x + 250, y + h - 26, x + 268, y + h - 58, x + 286, y + h - 26, RED); // fire
   triangle(x + 262, y + h - 26, x + 272, y + h - 46, x + 282, y + h - 26, GOLD);
+  circle(x + 268, y + h - 66, 8, GREY); // smoke column
+  circle(x + 276, y + h - 76, 10, GREY);
+  circle(x + 284, y + h - 70, 7, GREY);
   fillVGrad(x, y + h - 26, w, 26, [192, 36, 40], [160, 26, 32]); // DENIED bar
   drawTextCentered('DENIED', x + w / 2, y + h - 22, 16, WHITE, true);
 }
@@ -481,25 +507,41 @@ function drawKyiv(x: number, y: number, w: number, h: number): void {
   for (const [sx, sy] of stars) fillRect(x + sx, y + sy, 3, 3, WHITE);
   circle(x + w - 44, y + 26, 14, PAPER); // moon
   ring(x + w - 44, y + 26, 17, 2, GOLD); // moon glow
-  // Five drone silhouettes (small X shapes).
-  for (const [dx, dy] of [[90, 58], [150, 48], [230, 62], [120, 70], [270, 52]] as Array<[number, number]>) {
+  // Seven drone silhouettes (small X shapes).
+  for (const [dx, dy] of [[90, 58], [150, 48], [230, 62], [120, 70], [270, 52], [60, 40], [200, 30]] as Array<[number, number]>) {
     line(x + dx - 8, y + dy - 8, x + dx + 8, y + dy + 8, 2, WHITE);
     line(x + dx + 8, y + dy - 8, x + dx - 8, y + dy + 8, 2, WHITE);
   }
+  line(x + 196, y + h - 40, x + 230, y + 62, 1, GOLD); // tracers
+  line(x + 40, y + h - 34, x + 90, y + 58, 1, GOLD);
+  // Background skyline row (darker, further away).
+  fillRect(x + 10, y + h - 52, 50, 18, DARKNAVY);
+  fillRect(x + 140, y + h - 48, 60, 14, DARKNAVY);
+  fillRect(x + 280, y + h - 50, 36, 16, DARKNAVY);
+  for (let i = 0; i < 3; i++) fillRect(x + 16 + i * 14, y + h - 48, 3, 3, GOLD);
+  for (let i = 0; i < 2; i++) fillRect(x + 146 + i * 16, y + h - 44, 3, 3, GOLD);
+  fillRect(x + 286, y + h - 46, 3, 3, GOLD);
   // Second block, standing.
   fillRect(x + 190, y + h - 40, 72, 40, GREY);
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) fillRect(x + 198 + c * 22, y + h - 34 + r * 11, 8, 6, GOLD);
   }
+  fillRect(x + 198, y + h - 23, 8, 6, INK); // dark windows
+  fillRect(x + 242, y + h - 34, 8, 6, INK);
   fillRect(x + 30, y + h - 34, 96, 34, GREY); // five-storey block
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 4; c++) fillRect(x + 40 + c * 22, y + h - 28 + r * 10, 8, 6, GOLD);
   }
+  fillRect(x + 62, y + h - 28, 8, 6, INK); // dark windows
+  fillRect(x + 106, y + h - 18, 8, 6, INK);
+  line(x + 30, y + h - 34, x + 78, y + h - 44, 2, INK); // broken roofline
   triangle(x + 40, y + h - 34, x + 58, y + h - 58, x + 76, y + h - 34, RED); // fire on the hit block
   triangle(x + 50, y + h - 34, x + 58, y + h - 50, x + 66, y + h - 34, GOLD);
   circle(x + 60, y + h - 64, 9, GREY); // smoke
   circle(x + 82, y + h - 72, 12, GREY);
   circle(x + 104, y + h - 66, 8, GREY);
+  circle(x + 94, y + h - 82, 10, [178, 174, 162]); // lighter smoke, higher
+  circle(x + 116, y + h - 78, 7, [178, 174, 162]);
 }
 
 const HEROES: Hero[] = [
@@ -761,6 +803,7 @@ function render(): void {
     const ay = mapY + pr * cell + 2;
     const dcx = ax + ddx;
     const dcy = ay + ddy;
+    circle(dcx, dcy, 11, PAPER); // halo: knock out land dots under the pin
     line(ax, ay, dcx, dcy, 2, RED); // stem: anchor -> disc centre
     circle(dcx, dcy, 8, WHITE); // white ring
     circle(dcx, dcy, 6, RED); // red disc
